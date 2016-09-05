@@ -14,14 +14,17 @@ var request = require('request');
 console.log('This is the server (tm)');
 
 function main() {
-    runTomorrowCycle();
-    schedule.scheduleJob('* /1 * * * *', runCycle);
-    schedule.scheduleJob('* * /6 * * *', runTomorrowCycle);
+    schedule.scheduleJob('*/1 * * * *', function () {
+	runCycle();
+    });
+    schedule.scheduleJob('* */6 * * *', function () {
+	runTomorrowCycle();
+    });
 }
 
 function runCycle () {
     var selectedDate = new Date();
-    selectedDate.setTime(selectedDate.getTime() - (5 * 60 * 60 * 1000));
+    selectedDate.setTime(selectedDate.getTime() - (10 * 60 * 60 * 1000));
     
     request(getURL(selectedDate), function (error, response, body) {
 	if (!error) {
@@ -84,7 +87,6 @@ function getDateObj (game, selectedDate) {
         givenTime = (parseInt(timeSpl[0]) + 12).toString() + ':' + timeSpl[1];
     }
 
-    console.log(givenTime);
     var newDate = new Date(dateString + 'T' + givenTime + '-0' + offset + '00');
 	
     return newDate;
@@ -109,7 +111,6 @@ function getStatus (game) {
 
 function sendPregamePin (game, selectedDate) {
     var gameDate = getDateObj(game, selectedDate);
-    console.log(gameDate.toString());
 	
     var pin = new Timeline.Pin({
         id: game.id.replace(/\//g,'-'),
@@ -142,7 +143,6 @@ function sendPregamePin (game, selectedDate) {
 
 function sendOverPin (game, selectedDate) {
     var gameDate = getDateObj(game, selectedDate);
-    console.log(gameDate.toString());
     
     var homeScore = game.linescore.r.home;
     var awayScore = game.linescore.r.away;
@@ -196,7 +196,6 @@ function sendOverPin (game, selectedDate) {
 
 function sendInProgressPin (game, selectedDate) {
     var gameDate = getDateObj(game, selectedDate);
-        console.log(gameDate.toString());
     
     var pin = new Timeline.Pin({
         id: game.id.replace(/\//g,'_'),
@@ -229,10 +228,16 @@ function sendPinController (body, selectedDate) {
     catch (err) {
 	var jsonObj = {};
     }
-	
-    if (jsonObj === null) {
-	jsonObj = {};
+
+    // Erases games from 2 days ago
+    var oldDate = new Date();
+    oldDate.setTime(selectedDate.getTime() - (2 * 24 * 60 * 60 * 1000));
+
+    var oldDay = oldDate.getDate();
+    if (jsonObj[oldDay]) {
+	jsonObj[oldDay] = null;
     }
+    
     var dayObj = {};
     var games = body.data.games.game;
     var pinList = [];
@@ -240,7 +245,7 @@ function sendPinController (body, selectedDate) {
 	var game = games[i];
 	var gameStatus = getStatus(game);
 	if (gameStatus === 'Not Started') {
-	    pin = (game, selectedDate);
+	    pin = sendPregamePin(game, selectedDate);
 	}
 	else if (gameStatus === 'Over') {
 	    pin = sendOverPin(game, selectedDate);
@@ -257,16 +262,14 @@ function sendPinController (body, selectedDate) {
 	    subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
 	};
     }
-    
+
     for (var gameI in dayObj) {
 	var pinObj = dayObj[gameI];
 
-	sendPin(pinObj, jsonObj, selectedDate);
 	var day = jsonObj[selectedDate.getDate()];
 	if (day) {
-	    if (day[pinObj.id]) {
-		var writtenGame = day[pinObj.id];
-
+	    if (day[pinObj.gameId]) {
+		var writtenGame = day[pinObj.gameId];
 		if (!(writtenGame.status === 'Over' && game.status === 'Over')) {
 		    sendPin(pinObj, jsonObj, selectedDate);
 		}
@@ -278,14 +281,13 @@ function sendPinController (body, selectedDate) {
     }
     
     jsonObj[selectedDate.getDate()] = dayObj;
-    console.log(JSON.stringify(jsonObj, null, 4));
     jsonfile.writeFileSync(datafile, jsonObj);
 }
 
 function sendPin (pinObj, jsonObj, selectedDate)  {
-    /*timeline.sendUserPin(pinObj.subscriptions, pinObj.pin, function (err) {
+    timeline.sendSharedPin(pinObj.subscriptions, pinObj.pin, function (err) {
 	if (err) {
-            return console.error(err);
+            console.log(err);
         }
         else {
             var gameId = pinObj.gameId;
@@ -300,20 +302,7 @@ function sendPin (pinObj, jsonObj, selectedDate)  {
 	    }
             console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ')');
         }
-    });*/
-
-    var gameId = pinObj.gameId;
-    var day = jsonObj[selectedDate.getDate()];
-    if (!day) {
-        jsonObj[selectedDate.getDate()] = {
-            gameId: pinObj
-        }
-    }
-    else {
-        day[pinObj.id] = pinObj;
-    }
-    // console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ')');
-    // console.log(gameId);
+    });
 }
 
 main();
