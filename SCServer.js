@@ -1,10 +1,9 @@
 // Cool stuff goes here
-
 var devToken = 'SBj6klq15kt13tl2lvg13neyuvssr866';
 var prodToken = 'l3tob6zd7x4el7svcfk33v7jxahq61z7';
 var Timeline = require('pebble-api').Timeline;
 var timeline = new Timeline({
-    apiKey: devToken
+    apiKey: prodToken
 });
 var schedule = require('node-schedule');
 var jsonfile = require('jsonfile');
@@ -160,7 +159,7 @@ function sendPregamePin (game, selectedDate) {
 		'layout': {
 		    'type': 'genericReminder',
 		    'tinyIcon': 'system://images/TIMELINE_BASEBALL',
-		    'title': game.away_name_abbrev + ' @ ' + game.home_name_abbrev
+		    'title': game.away_name_abbrev + ' at ' + game.home_name_abbrev
 		}
 	    }
 	]
@@ -171,7 +170,7 @@ function sendPregamePin (game, selectedDate) {
 
 function sendOverPin (game, selectedDate) {
     var gameDate = getDateObj(game, selectedDate);
-    
+
     var homeScore = game.linescore.r.home;
     var awayScore = game.linescore.r.away;
     var titleText = game.away_name_abbrev + ': ' + awayScore + ' - ' +
@@ -182,14 +181,14 @@ function sendOverPin (game, selectedDate) {
     var winner = game.winning_pitcher;
     var loser = game.losing_pitcher;
     var saver = game.save_pitcher;
-    var pitchers = [winner, loser, saver];
+    var pitchers = [winner, loser];
 
     for (var pitcherI in pitchers) {
 	var pitcher = pitchers[pitcherI];
 	pitcher.pStats = pitcher.wins + '-' + pitcher.losses + ', ' + pitcher.era;
     }
     
-    var gameText = 'W: ' + winner.name_display_roster + ' (' + winner.pStats + ')\nL: ' + loser.name_display_roster + ' (' + loser.pStats + ')';
+    var gameText = 'W: ' + winner.name_display_roster + '\nL: ' + loser.name_display_roster;
     if (saver.name !== '') {
 	gameText = gameText + '\nS: ' + saver.name_display_roster + ' (' + saver.pStats + ')';
     }
@@ -208,9 +207,9 @@ function sendOverPin (game, selectedDate) {
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
             'largeIcon': 'system://images/TIMELINE_BASEBALL'
 	},
-	createNotification: {
+	updateNotification: {
+	    time: new Date(),
 	    layout: {
-		time: new Date(),
 		type: 'genericNotification',
 		tinyIcon: 'system://images/TIMELINE_BASEBALL',
 		title: titleText,
@@ -219,6 +218,8 @@ function sendOverPin (game, selectedDate) {
 	}
     });
 
+    // console.log(JSON.stringify(pin, null, 4));
+    
     return pin;
 }
 
@@ -230,7 +231,7 @@ function sendInProgressPin (game, selectedDate) {
         time: gameDate,
         layout: {
             'type': 'sportsPin',
-            'title': game.away_name_abbrev + ' @ ' + game.home_name_abbrev,
+            'title': game.away_name_abbrev + ' at ' + game.home_name_abbrev,
 	    'subtitle': game.status.inning_state + ' ' + game.status.inning,
 	    'nameAway': game.away_name_abbrev,
             'nameHome': game.home_name_abbrev,
@@ -290,7 +291,7 @@ function sendPinController (body, selectedDate) {
 	    subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
 	};
     }
-
+    
     for (var gameI in dayObj) {
 	var pinObj = dayObj[gameI];
 
@@ -298,7 +299,7 @@ function sendPinController (body, selectedDate) {
 	if (day) {
 	    if (day[pinObj.gameId]) {
 		var writtenGame = day[pinObj.gameId];
-		if (!(writtenGame.status === 'Over' && game.status === 'Over')) {
+		if ((pinObj.status === 'Over' && writtenGame.status !== 'Over') || pinObj.status !== 'Over') {
 		    sendPin(pinObj, jsonObj, selectedDate);
 		}
 	    }
@@ -328,7 +329,7 @@ function sendPin (pinObj, jsonObj, selectedDate)  {
 	    else {
 		day[gameId] = pinObj;
 	    }
-            console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ')');
+            console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ') -- ' + (new Date()).toISOString());
         }
     });
 }
