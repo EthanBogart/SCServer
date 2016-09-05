@@ -20,6 +20,10 @@ function main() {
     schedule.scheduleJob('* */6 * * *', function () {
 	runTomorrowCycle();
     });
+
+    schedule.scheduleJob('* */6 * * *', function () {
+	runTwoDaysFromNowCycle();
+    });
 }
 
 function runCycle () {
@@ -40,6 +44,17 @@ function runTomorrowCycle () {
     request(getURL(tomorrowDate), function (error, response, body) {
 	if (!error) {
 	    sendPinController(JSON.parse(body), tomorrowDate);
+	}
+    });
+}
+
+function runTwoDaysFromNowCycle () {
+    var twoDaysFromNow = new Date();
+    twoDaysFromNow.setTime(twoDaysFromNow.getTime() + (43 * 60 * 60 * 1000));
+    
+    request(getURL(twoDaysFromNow), function (error, response, body) {
+	if (!error) {
+	    sendPinController(JSON.parse(body), twoDaysFromNow);
 	}
     });
 }
@@ -111,20 +126,33 @@ function getStatus (game) {
 
 function sendPregamePin (game, selectedDate) {
     var gameDate = getDateObj(game, selectedDate);
-	
+
+    var hpp = game.home_probable_pitcher;
+    var app = game.away_probable_pitcher;
+    var pitchers = [hpp, app];
+
+    for (var pitcherI in pitchers) {
+	var pitcher = pitchers[pitcherI];
+	pitcher.pStats = pitcher.wins + '-' + pitcher.losses + ', ' + pitcher.era;
+	pitcher.name = pitcher.first + ' ' + pitcher.last;
+    }
+
+    var bodyText = 'HP: ' + hpp.name + '\n (' + hpp.pStats + ')\n' + 'AP: ' + app.name + '\n (' + app.pStats + ')';
+    
     var pin = new Timeline.Pin({
         id: game.id.replace(/\//g,'-'),
         time: gameDate,
         layout: {
             'type': 'sportsPin',
-            'title': game.away_name_abbrev + ' @ ' + game.home_name_abbrev,
+            'title': game.away_name_abbrev + ' at ' + game.home_name_abbrev,
             'nameAway': game.away_name_abbrev,
 	    'nameHome': game.home_name_abbrev,
             'recordAway': game.away_win + '/' + game.away_loss,
             'recordHome': game.home_win + '/' + game.home_loss,
             'sportsGameState': 'pre-game',
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
-            'largeIcon': 'system://images/TIMELINE_BASEBALL'
+            'largeIcon': 'system://images/TIMELINE_BASEBALL',
+	    'body': bodyText 
 	},
 	reminders: [
 	    {
