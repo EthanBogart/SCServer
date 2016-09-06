@@ -14,13 +14,15 @@ console.log('This is the server (tm)');
 
 function main() {
     schedule.scheduleJob('*/1 * * * *', function () {
+	console.log('run');
 	runCycle();
     });
-    schedule.scheduleJob('* */6 * * *', function () {
+    schedule.scheduleJob('0 */6 * * *', function () {
+	console.log('tomorrow');
 	runTomorrowCycle();
     });
-
-    schedule.scheduleJob('* */6 * * *', function () {
+    schedule.scheduleJob('0 */6 * * *', function () {
+	console.log('two days');
 	runTwoDaysFromNowCycle();
     });
 }
@@ -28,18 +30,23 @@ function main() {
 function runCycle () {
     var selectedDate = new Date();
     selectedDate.setTime(selectedDate.getTime() - (10 * 60 * 60 * 1000));
-    
-    request(getURL(selectedDate), function (error, response, body) {
-	if (!error) {
-	    sendPinController(JSON.parse(body), selectedDate);
-	}
-    });
+
+    if (areGamesOver(selectedDate)) {
+	console.log('Games are recorded as over for ' + selectedDate.toDateString() + ', no more pins to send -- ' + selectedDate.toISOString());
+    }
+    else {
+	request(getURL(selectedDate), function (error, response, body) {
+	    if (!error) {
+		sendPinController(JSON.parse(body), selectedDate);
+	    }
+	});
+    }
 }
 
 function runTomorrowCycle () {
     var tomorrowDate = new Date();
-    tomorrowDate.setTime(tomorrowDate.getTime() + (19 * 60 * 60 * 1000));
-    
+    tomorrowDate.setTime(tomorrowDate.getTime() + (14 * 60 * 60 * 1000));
+
     request(getURL(tomorrowDate), function (error, response, body) {
 	if (!error) {
 	    sendPinController(JSON.parse(body), tomorrowDate);
@@ -49,7 +56,7 @@ function runTomorrowCycle () {
 
 function runTwoDaysFromNowCycle () {
     var twoDaysFromNow = new Date();
-    twoDaysFromNow.setTime(twoDaysFromNow.getTime() + (43 * 60 * 60 * 1000));
+    twoDaysFromNow.setTime(twoDaysFromNow.getTime() + (38 * 60 * 60 * 1000));
     
     request(getURL(twoDaysFromNow), function (error, response, body) {
 	if (!error) {
@@ -189,7 +196,7 @@ function sendOverPin (game, selectedDate) {
     }
     
     var gameText = 'W: ' + winner.name_display_roster + '\nL: ' + loser.name_display_roster;
-    if (saver.name !== '') {
+    if (saver.name) {
 	gameText = gameText + '\nS: ' + saver.name_display_roster + ' (' + saver.pStats + ')';
     }
     
@@ -257,10 +264,10 @@ function sendPinController (body, selectedDate) {
     catch (err) {
 	var jsonObj = {};
     }
-
-    // Erases games from 2 days ago
+    
+    // Erases games from 4 days ago
     var oldDate = new Date();
-    oldDate.setTime(selectedDate.getTime() - (2 * 24 * 60 * 60 * 1000));
+    oldDate.setTime(selectedDate.getTime() - (4 * 24 * 60 * 60 * 1000));
 
     var oldDay = oldDate.getDate();
     if (jsonObj[oldDay]) {
@@ -269,7 +276,6 @@ function sendPinController (body, selectedDate) {
     
     var dayObj = {};
     var games = body.data.games.game;
-    var pinList = [];
     for (var i in games) {
 	var game = games[i];
 	var gameStatus = getStatus(game);
@@ -295,17 +301,17 @@ function sendPinController (body, selectedDate) {
     for (var gameI in dayObj) {
 	var pinObj = dayObj[gameI];
 
-	var day = jsonObj[selectedDate.getDate()];
-	if (day) {
-	    if (day[pinObj.gameId]) {
-		var writtenGame = day[pinObj.gameId];
+	var day = selectedDate.getDate();
+	if (jsonObj[day]) {
+	    if (jsonObj[day][pinObj.gameId]) {
+		var writtenGame = jsonObj[day][pinObj.gameId];
 		if ((pinObj.status === 'Over' && writtenGame.status !== 'Over') || pinObj.status !== 'Over') {
-		    sendPin(pinObj, jsonObj, selectedDate);
+		     sendPin(pinObj, jsonObj, selectedDate);
 		}
 	    }
 	}
 	else {
-	    sendPin(pinObj, jsonObj, selectedDate);
+	     sendPin(pinObj, jsonObj, selectedDate);
 	}
     }
     
@@ -320,18 +326,41 @@ function sendPin (pinObj, jsonObj, selectedDate)  {
         }
         else {
             var gameId = pinObj.gameId;
-	    var day = jsonObj[selectedDate.getDate()];
-            if (!day) {
-                jsonObj[selectedDate.getDate()] = {
+	    var day = selectedDate.getDate();
+            if (!jsonObj.day) {
+                jsonObj.day = {
                     gameId: pinObj
                 }
             }
 	    else {
-		day[gameId] = pinObj;
+		jsonObj.day[gameId] = pinObj;
 	    }
             console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ') -- ' + (new Date()).toISOString());
         }
     });
+}
+
+function areGamesOver (selectedDate) {
+    try {
+	var jsonObj = jsonfile.readFileSync(datafile);
+    }
+    catch (err) {
+	return false;
+    }
+
+    var day = selectedDate.getDate();
+    if (jsonObj[day]) {
+	
+	for (var gameI in jsonObj[day]) {    
+	    var game = jsonObj[day][gameI];
+
+	    if (game.status !== 'Over') {
+		return false;
+	    }
+	}
+    }
+
+    return true;
 }
 
 main();
