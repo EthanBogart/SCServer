@@ -11,6 +11,7 @@ var datafile = 'data.json';
 var request = require('request');
 
 console.log('This is the server (tm)');
+console.log('Started at ' + (new Date()).toISOString());
 
 function main() {
     schedule.scheduleJob('*/1 * * * *', function () {
@@ -37,7 +38,7 @@ function runCycle () {
     else {
 	request(getURL(selectedDate), function (error, response, body) {
 	    if (!error) {
-		sendPinController(JSON.parse(body), selectedDate);
+		sendPinController(JSON.parse(body), selectedDate, new Date());
 	    }
 	});
     }
@@ -130,7 +131,7 @@ function getStatus (game) {
     }
 }
 
-function sendPregamePin (game, selectedDate) {
+function sendPregamePin (game, selectedDate, runDate) {
     var gameDate = getDateObj(game, selectedDate);
 
     var hpp = game.home_probable_pitcher;
@@ -146,7 +147,7 @@ function sendPregamePin (game, selectedDate) {
     var bodyText = 'HP: ' + hpp.name + '\n (' + hpp.pStats + ')\n' + 'AP: ' + app.name + '\n (' + app.pStats + ')';
     
     var pin = new Timeline.Pin({
-        id: game.id.replace(/\//g,'-'),
+        id: game.id.replace(/\//g,'_'),
         time: gameDate,
         layout: {
             'type': 'sportsPin',
@@ -158,7 +159,10 @@ function sendPregamePin (game, selectedDate) {
             'sportsGameState': 'pre-game',
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
             'largeIcon': 'system://images/TIMELINE_BASEBALL',
-	    'body': bodyText 
+	    'primaryColor': '#FFFFFF',
+	    'backgroundColor': '#0055AA',
+	    'body': bodyText,
+	    'lastUpdated': runDate
 	},
 	reminders: [
 	    {
@@ -175,15 +179,18 @@ function sendPregamePin (game, selectedDate) {
     return pin;
 }
 
-function sendOverPin (game, selectedDate) {
+function sendOverPin (game, selectedDate, runDate) {
     var gameDate = getDateObj(game, selectedDate);
 
     var homeScore = game.linescore.r.home;
     var awayScore = game.linescore.r.away;
-    var titleText = game.away_name_abbrev + ': ' + awayScore + ' - ' +
+    var titleText = game.away_name_abbrev + ': ' + awayScore + '\n' +
+	game.home_name_abbrev + ': ' + homeScore;
+    var noteTitleText = game.away_name_abbrev + ': ' + awayScore + ' - ' +
 	game.home_name_abbrev + ': ' + homeScore;
     var extras = parseFloat(game.status.inning) > 9 ? '/' + game.status.inning : '';
-    titleText = titleText + ' (F' + extras + ')';
+    var subtitleText = '(Final' + extras + ')';
+    noteTitleText = noteTitleText + ' (F' + extras + ')';
 
     var winner = game.winning_pitcher;
     var loser = game.losing_pitcher;
@@ -201,25 +208,32 @@ function sendOverPin (game, selectedDate) {
     }
     
     var pin = new Timeline.Pin({
-        id: game.id.replace(/\//g,'-'),
+        id: game.id.replace(/\//g,'_'),
         time: gameDate,
         layout: {
             'type': 'sportsPin',
             'title': titleText,
+	    'subtitle': subtitleText,
             'nameAway': game.away_name_abbrev,
             'nameHome': game.home_name_abbrev,
             'recordAway': game.away_win + '/' + game.away_loss,
             'recordHome': game.home_win + '/' + game.home_loss,
+	    'scoreAway': game.linescore.r.away,
+	    'scoreHome': game.linescore.r.home,
             'sportsGameState': 'in-game',
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
-            'largeIcon': 'system://images/TIMELINE_BASEBALL'
+            'largeIcon': 'system://images/TIMELINE_BASEBALL',
+	    'body': gameText,
+	    'primaryColor': '#FFFFFF',
+	    'backgroundColor': '#0055AA',
+	    'lastUpdated': runDate
 	},
 	updateNotification: {
 	    time: new Date(),
 	    layout: {
 		type: 'genericNotification',
 		tinyIcon: 'system://images/TIMELINE_BASEBALL',
-		title: titleText,
+		title: noteTitleText,
 		body: gameText
 	    }
 	}
@@ -230,7 +244,7 @@ function sendOverPin (game, selectedDate) {
     return pin;
 }
 
-function sendInProgressPin (game, selectedDate) {
+function sendInProgressPin (game, selectedDate, runDate) {
     var gameDate = getDateObj(game, selectedDate);
     
     var pin = new Timeline.Pin({
@@ -238,7 +252,7 @@ function sendInProgressPin (game, selectedDate) {
         time: gameDate,
         layout: {
             'type': 'sportsPin',
-            'title': game.away_name_abbrev + ' at ' + game.home_name_abbrev,
+            'title': game.away_name_abbrev + ': ' + game.linescore.r.away + '\n' + game.home_name_abbrev  + ': ' + game.linescore.r.home,
 	    'subtitle': game.status.inning_state + ' ' + game.status.inning,
 	    'nameAway': game.away_name_abbrev,
             'nameHome': game.home_name_abbrev,
@@ -248,14 +262,17 @@ function sendInProgressPin (game, selectedDate) {
 	    'scoreHome': game.linescore.r.home,
 	    'sportsGameState': 'in-game',
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
-            'largeIcon': 'system://images/TIMELINE_BASEBALL'
+            'largeIcon': 'system://images/TIMELINE_BASEBALL',
+	    'primaryColor': '#FFFFFF',
+	    'backgroundColor': '#0055AA',
+	    'lastUpdated': runDate
 	}
     });
 
     return pin;
 }
 
-function sendPinController (body, selectedDate) {
+function sendPinController (body, selectedDate, runDate) {
 
     // Keeps a record, indexed by game id (with /'s, not _'s)
     try {
@@ -279,23 +296,26 @@ function sendPinController (body, selectedDate) {
     for (var i in games) {
 	var game = games[i];
 	var gameStatus = getStatus(game);
+	var pin;
 	if (gameStatus === 'Not Started') {
-	    pin = sendPregamePin(game, selectedDate);
+	    pin = sendPregamePin(game, selectedDate, runDate);
 	}
 	else if (gameStatus === 'Over') {
-	    pin = sendOverPin(game, selectedDate);
+	    pin = sendOverPin(game, selectedDate, runDate);
 	}
 	else if (gameStatus === 'In Progress') {
-	    pin = sendInProgressPin(game, selectedDate);
+	    pin = sendInProgressPin(game, selectedDate, runDate);
 	}
 
-	dayObj[game.id] = {
-	    pin: pin,
-	    date: new Date(),
-	    status: gameStatus,
-	    gameId: game.id,
-	    subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
-	};
+	if (pin) {
+	    dayObj[game.id] = {
+		pin: pin,
+		date: new Date(),
+		status: gameStatus,
+		gameId: game.id,
+		subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
+	    };
+	}
     }
     
     for (var gameI in dayObj) {
@@ -320,6 +340,7 @@ function sendPinController (body, selectedDate) {
 }
 
 function sendPin (pinObj, jsonObj, selectedDate)  {
+    
     timeline.sendSharedPin(pinObj.subscriptions, pinObj.pin, function (err) {
 	if (err) {
             console.log(err);
@@ -327,15 +348,15 @@ function sendPin (pinObj, jsonObj, selectedDate)  {
         else {
             var gameId = pinObj.gameId;
 	    var day = selectedDate.getDate();
-            if (!jsonObj.day) {
-                jsonObj.day = {
+	    console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ') -- ' + (new Date()).toISOString());
+	    if (!jsonObj[day]) {
+                jsonObj[day] = {
                     gameId: pinObj
                 }
             }
 	    else {
-		jsonObj.day[gameId] = pinObj;
+		jsonObj[day][gameId] = pinObj;
 	    }
-            console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ') -- ' + (new Date()).toISOString());
         }
     });
 }
