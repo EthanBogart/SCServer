@@ -50,7 +50,7 @@ function runTomorrowCycle () {
 
     request(getURL(tomorrowDate), function (error, response, body) {
 	if (!error) {
-	    sendPinController(JSON.parse(body), tomorrowDate);
+	    sendPinController(JSON.parse(body), tomorrowDate, new Date());
 	}
     });
 }
@@ -61,7 +61,7 @@ function runTwoDaysFromNowCycle () {
     
     request(getURL(twoDaysFromNow), function (error, response, body) {
 	if (!error) {
-	    sendPinController(JSON.parse(body), twoDaysFromNow);
+	    sendPinController(JSON.parse(body), twoDaysFromNow, new Date());
 	}
     });
 }
