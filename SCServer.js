@@ -1,14 +1,24 @@
 // Cool stuff goes here
-var devToken = 'SBj6klq15kt13tl2lvg13neyuvssr866';
-var prodToken = 'l3tob6zd7x4el7svcfk33v7jxahq61z7';
-var Timeline = require('pebble-api').Timeline;
-var timeline = new Timeline({
-    apiKey: prodToken
-});
 var schedule = require('node-schedule');
 var jsonfile = require('jsonfile');
 var datafile = 'data.json';
 var request = require('request');
+
+// Pulls keys from json file
+try {
+    var keys = jsonfile.readFileSync('tokens.json');
+    var devToken = keys.devToken;
+    var prodToken = keys.prodToken;
+    var Timeline = require('pebble-api').Timeline;
+    var timeline = new Timeline({
+	apiKey: prodToken
+    });
+
+    main();
+}
+catch (err) {
+    console.log('You do not have the proper keys to send pins to the app.\nIf you wish to try using the client, put your keys in a json file called "tokens.json"');
+}
 
 console.log('This is the server (tm)');
 console.log('Started at ' + (new Date()).toISOString());
@@ -383,5 +393,3 @@ function areGamesOver (selectedDate) {
 
     return true;
 }
-
-main();
