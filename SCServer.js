@@ -1,26 +1,39 @@
 // Cool stuff goes here
-var devToken = 'SBj6klq15kt13tl2lvg13neyuvssr866';
-var prodToken = 'l3tob6zd7x4el7svcfk33v7jxahq61z7';
-var Timeline = require('pebble-api').Timeline;
-var timeline = new Timeline({
-    apiKey: prodToken
-});
 var schedule = require('node-schedule');
 var jsonfile = require('jsonfile');
 var datafile = 'data.json';
 var request = require('request');
 
+// Pulls keys from json file
+try {
+    var keys = jsonfile.readFileSync('tokens.json');
+    var devToken = keys.devToken;
+    var prodToken = keys.prodToken;
+    var Timeline = require('pebble-api').Timeline;
+    var timeline = new Timeline({
+	apiKey: prodToken
+    });
+
+    main();
+}
+catch (err) {
+    console.log('You do not have the proper keys to send pins to the app.\nIf you wish to try using the client, put your keys in a json file called "tokens.json"');
+}
+
 console.log('This is the server (tm)');
+console.log('Started at ' + (new Date()).toISOString());
 
 function main() {
     schedule.scheduleJob('*/1 * * * *', function () {
+	console.log('run');
 	runCycle();
     });
-    schedule.scheduleJob('* */6 * * *', function () {
+    schedule.scheduleJob('0 */6 * * *', function () {
+	console.log('tomorrow');
 	runTomorrowCycle();
     });
-
-    schedule.scheduleJob('* */6 * * *', function () {
+    schedule.scheduleJob('0 */6 * * *', function () {
+	console.log('two days');
 	runTwoDaysFromNowCycle();
     });
 }
@@ -28,32 +41,37 @@ function main() {
 function runCycle () {
     var selectedDate = new Date();
     selectedDate.setTime(selectedDate.getTime() - (10 * 60 * 60 * 1000));
-    
-    request(getURL(selectedDate), function (error, response, body) {
-	if (!error) {
-	    sendPinController(JSON.parse(body), selectedDate);
-	}
-    });
+
+    if (areGamesOver(selectedDate)) {
+	console.log('Games are recorded as over for ' + selectedDate.toDateString() + ', no more pins to send -- ' + selectedDate.toISOString());
+    }
+    else {
+	request(getURL(selectedDate), function (error, response, body) {
+	    if (!error) {
+		sendPinController(JSON.parse(body), selectedDate, new Date());
+	    }
+	});
+    }
 }
 
 function runTomorrowCycle () {
     var tomorrowDate = new Date();
-    tomorrowDate.setTime(tomorrowDate.getTime() + (19 * 60 * 60 * 1000));
-    
+    tomorrowDate.setTime(tomorrowDate.getTime() + (14 * 60 * 60 * 1000));
+
     request(getURL(tomorrowDate), function (error, response, body) {
 	if (!error) {
-	    sendPinController(JSON.parse(body), tomorrowDate);
+	    sendPinController(JSON.parse(body), tomorrowDate, new Date());
 	}
     });
 }
 
 function runTwoDaysFromNowCycle () {
     var twoDaysFromNow = new Date();
-    twoDaysFromNow.setTime(twoDaysFromNow.getTime() + (43 * 60 * 60 * 1000));
+    twoDaysFromNow.setTime(twoDaysFromNow.getTime() + (38 * 60 * 60 * 1000));
     
     request(getURL(twoDaysFromNow), function (error, response, body) {
 	if (!error) {
-	    sendPinController(JSON.parse(body), twoDaysFromNow);
+	    sendPinController(JSON.parse(body), twoDaysFromNow, new Date());
 	}
     });
 }
@@ -108,7 +126,7 @@ function getDateObj (game, selectedDate) {
 
 function getStatus (game) {
     if (game.linescore && game.status.ind !== 'PW' && game.status.ind !== 'P') {
-	if (game.status.status === 'Game Over' || game.status.status === 'Final') {
+	if (game.status.status === 'Game Over' || game.status.status === 'Final' || game.status.status === 'Completed Early') {
 	    return 'Over';
 	}
 	else if (game.status.status.toLowerCase().indexOf('delay') !== -1 || game.status.status.toLowerCase().indexOf('postpone') !== -1 || game.status.status.toLowerCase().indexOf('cancel') !== -1) {
@@ -123,7 +141,7 @@ function getStatus (game) {
     }
 }
 
-function sendPregamePin (game, selectedDate) {
+function sendPregamePin (game, selectedDate, runDate) {
     var gameDate = getDateObj(game, selectedDate);
 
     var hpp = game.home_probable_pitcher;
@@ -139,7 +157,7 @@ function sendPregamePin (game, selectedDate) {
     var bodyText = 'HP: ' + hpp.name + '\n (' + hpp.pStats + ')\n' + 'AP: ' + app.name + '\n (' + app.pStats + ')';
     
     var pin = new Timeline.Pin({
-        id: game.id.replace(/\//g,'-'),
+        id: game.id.replace(/\//g,'_'),
         time: gameDate,
         layout: {
             'type': 'sportsPin',
@@ -151,7 +169,10 @@ function sendPregamePin (game, selectedDate) {
             'sportsGameState': 'pre-game',
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
             'largeIcon': 'system://images/TIMELINE_BASEBALL',
-	    'body': bodyText 
+	    'primaryColor': '#FFFFFF',
+	    'backgroundColor': '#0055AA',
+	    'body': bodyText,
+	    'lastUpdated': runDate
 	},
 	reminders: [
 	    {
@@ -168,15 +189,18 @@ function sendPregamePin (game, selectedDate) {
     return pin;
 }
 
-function sendOverPin (game, selectedDate) {
+function sendOverPin (game, selectedDate, runDate) {
     var gameDate = getDateObj(game, selectedDate);
 
     var homeScore = game.linescore.r.home;
     var awayScore = game.linescore.r.away;
-    var titleText = game.away_name_abbrev + ': ' + awayScore + ' - ' +
+    var titleText = game.away_name_abbrev + ': ' + awayScore + '\n' +
+	game.home_name_abbrev + ': ' + homeScore;
+    var noteTitleText = game.away_name_abbrev + ': ' + awayScore + ' - ' +
 	game.home_name_abbrev + ': ' + homeScore;
     var extras = parseFloat(game.status.inning) > 9 ? '/' + game.status.inning : '';
-    titleText = titleText + ' (F' + extras + ')';
+    var subtitleText = '(Final' + extras + ')';
+    noteTitleText = noteTitleText + ' (F' + extras + ')';
 
     var winner = game.winning_pitcher;
     var loser = game.losing_pitcher;
@@ -189,30 +213,37 @@ function sendOverPin (game, selectedDate) {
     }
     
     var gameText = 'W: ' + winner.name_display_roster + '\nL: ' + loser.name_display_roster;
-    if (saver.name !== '') {
+    if (saver.name) {
 	gameText = gameText + '\nS: ' + saver.name_display_roster + ' (' + saver.pStats + ')';
     }
     
     var pin = new Timeline.Pin({
-        id: game.id.replace(/\//g,'-'),
+        id: game.id.replace(/\//g,'_'),
         time: gameDate,
         layout: {
             'type': 'sportsPin',
             'title': titleText,
+	    'subtitle': subtitleText,
             'nameAway': game.away_name_abbrev,
             'nameHome': game.home_name_abbrev,
             'recordAway': game.away_win + '/' + game.away_loss,
             'recordHome': game.home_win + '/' + game.home_loss,
+	    'scoreAway': game.linescore.r.away,
+	    'scoreHome': game.linescore.r.home,
             'sportsGameState': 'in-game',
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
-            'largeIcon': 'system://images/TIMELINE_BASEBALL'
+            'largeIcon': 'system://images/TIMELINE_BASEBALL',
+	    'body': gameText,
+	    'primaryColor': '#FFFFFF',
+	    'backgroundColor': '#0055AA',
+	    'lastUpdated': runDate
 	},
 	updateNotification: {
 	    time: new Date(),
 	    layout: {
 		type: 'genericNotification',
 		tinyIcon: 'system://images/TIMELINE_BASEBALL',
-		title: titleText,
+		title: noteTitleText,
 		body: gameText
 	    }
 	}
@@ -223,7 +254,7 @@ function sendOverPin (game, selectedDate) {
     return pin;
 }
 
-function sendInProgressPin (game, selectedDate) {
+function sendInProgressPin (game, selectedDate, runDate) {
     var gameDate = getDateObj(game, selectedDate);
     
     var pin = new Timeline.Pin({
@@ -231,7 +262,7 @@ function sendInProgressPin (game, selectedDate) {
         time: gameDate,
         layout: {
             'type': 'sportsPin',
-            'title': game.away_name_abbrev + ' at ' + game.home_name_abbrev,
+            'title': game.away_name_abbrev + ': ' + game.linescore.r.away + '\n' + game.home_name_abbrev  + ': ' + game.linescore.r.home,
 	    'subtitle': game.status.inning_state + ' ' + game.status.inning,
 	    'nameAway': game.away_name_abbrev,
             'nameHome': game.home_name_abbrev,
@@ -241,14 +272,17 @@ function sendInProgressPin (game, selectedDate) {
 	    'scoreHome': game.linescore.r.home,
 	    'sportsGameState': 'in-game',
             'tinyIcon': 'system://images/TIMELINE_BASEBALL',
-            'largeIcon': 'system://images/TIMELINE_BASEBALL'
+            'largeIcon': 'system://images/TIMELINE_BASEBALL',
+	    'primaryColor': '#FFFFFF',
+	    'backgroundColor': '#0055AA',
+	    'lastUpdated': runDate
 	}
     });
 
     return pin;
 }
 
-function sendPinController (body, selectedDate) {
+function sendPinController (body, selectedDate, runDate) {
 
     // Keeps a record, indexed by game id (with /'s, not _'s)
     try {
@@ -257,10 +291,10 @@ function sendPinController (body, selectedDate) {
     catch (err) {
 	var jsonObj = {};
     }
-
-    // Erases games from 2 days ago
+    
+    // Erases games from 4 days ago
     var oldDate = new Date();
-    oldDate.setTime(selectedDate.getTime() - (2 * 24 * 60 * 60 * 1000));
+    oldDate.setTime(selectedDate.getTime() - (4 * 24 * 60 * 60 * 1000));
 
     var oldDay = oldDate.getDate();
     if (jsonObj[oldDay]) {
@@ -269,43 +303,45 @@ function sendPinController (body, selectedDate) {
     
     var dayObj = {};
     var games = body.data.games.game;
-    var pinList = [];
     for (var i in games) {
 	var game = games[i];
 	var gameStatus = getStatus(game);
+	var pin;
 	if (gameStatus === 'Not Started') {
-	    pin = sendPregamePin(game, selectedDate);
+	    pin = sendPregamePin(game, selectedDate, runDate);
 	}
 	else if (gameStatus === 'Over') {
-	    pin = sendOverPin(game, selectedDate);
+	    pin = sendOverPin(game, selectedDate, runDate);
 	}
 	else if (gameStatus === 'In Progress') {
-	    pin = sendInProgressPin(game, selectedDate);
+	    pin = sendInProgressPin(game, selectedDate, runDate);
 	}
 
-	dayObj[game.id] = {
-	    pin: pin,
-	    date: new Date(),
-	    status: gameStatus,
-	    gameId: game.id,
-	    subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
-	};
+	if (pin) {
+	    dayObj[game.id] = {
+		pin: pin,
+		date: new Date(),
+		status: gameStatus,
+		gameId: game.id,
+		subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
+	    };
+	}
     }
     
     for (var gameI in dayObj) {
 	var pinObj = dayObj[gameI];
 
-	var day = jsonObj[selectedDate.getDate()];
-	if (day) {
-	    if (day[pinObj.gameId]) {
-		var writtenGame = day[pinObj.gameId];
-		if ((pinObj.status === 'Over' && writtenGame.status !== 'Over') || pinObj.status !== 'Over') {
-		    sendPin(pinObj, jsonObj, selectedDate);
+	var day = selectedDate.getDate();
+	if (jsonObj[day]) {
+	    if (jsonObj[day][pinObj.gameId]) {
+		var writtenGame = jsonObj[day][pinObj.gameId];
+		if ((pinObj.status === 'Over' && writtenGame.status !== 'Over') || (pinObj.status !== 'Over' && pinObj.status !== 'Halted')) {
+		     sendPin(pinObj, jsonObj, selectedDate);
 		}
 	    }
 	}
 	else {
-	    sendPin(pinObj, jsonObj, selectedDate);
+	     sendPin(pinObj, jsonObj, selectedDate);
 	}
     }
     
@@ -314,24 +350,46 @@ function sendPinController (body, selectedDate) {
 }
 
 function sendPin (pinObj, jsonObj, selectedDate)  {
+    
     timeline.sendSharedPin(pinObj.subscriptions, pinObj.pin, function (err) {
 	if (err) {
             console.log(err);
         }
         else {
             var gameId = pinObj.gameId;
-	    var day = jsonObj[selectedDate.getDate()];
-            if (!day) {
-                jsonObj[selectedDate.getDate()] = {
+	    var day = selectedDate.getDate();
+	    console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ') -- ' + (new Date()).toISOString());
+	    if (!jsonObj[day]) {
+                jsonObj[day] = {
                     gameId: pinObj
                 }
             }
 	    else {
-		day[gameId] = pinObj;
+		jsonObj[day][gameId] = pinObj;
 	    }
-            console.log('Pin sent successfully: ' + pinObj.subscriptions[0] + ' @ ' + pinObj.subscriptions[1] + ' (' + pinObj.status + ') -- ' + (new Date()).toISOString());
         }
     });
 }
 
-main();
+function areGamesOver (selectedDate) {
+    try {
+	var jsonObj = jsonfile.readFileSync(datafile);
+    }
+    catch (err) {
+	return false;
+    }
+
+    var day = selectedDate.getDate();
+    if (jsonObj[day]) {
+	
+	for (var gameI in jsonObj[day]) {    
+	    var game = jsonObj[day][gameI];
+
+	    if (game.status !== 'Over') {
+		return false;
+	    }
+	}
+    }
+
+    return true;
+}
