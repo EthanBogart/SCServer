@@ -116,7 +116,7 @@ function getDateObj (game, selectedDate) {
 
 function getStatus (game) {
     if (game.linescore && game.status.ind !== 'PW' && game.status.ind !== 'P') {
-	if (game.status.status === 'Game Over' || game.status.status === 'Final') {
+	if (game.status.status === 'Game Over' || game.status.status === 'Final' || game.status.status === 'Completed Early') {
 	    return 'Over';
 	}
 	else if (game.status.status.toLowerCase().indexOf('delay') !== -1 || game.status.status.toLowerCase().indexOf('postpone') !== -1 || game.status.status.toLowerCase().indexOf('cancel') !== -1) {
@@ -325,7 +325,7 @@ function sendPinController (body, selectedDate, runDate) {
 	if (jsonObj[day]) {
 	    if (jsonObj[day][pinObj.gameId]) {
 		var writtenGame = jsonObj[day][pinObj.gameId];
-		if ((pinObj.status === 'Over' && writtenGame.status !== 'Over') || pinObj.status !== 'Over') {
+		if ((pinObj.status === 'Over' && writtenGame.status !== 'Over') || (pinObj.status !== 'Over' && pinObj.status !== 'Halted')) {
 		     sendPin(pinObj, jsonObj, selectedDate);
 		}
 	    }
