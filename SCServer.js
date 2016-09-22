@@ -125,7 +125,7 @@ function getDateObj (game, selectedDate) {
 }
 
 function getStatus (game) {
-    if (game.linescore && game.status.ind !== 'PW' && game.status.ind !== 'P') {
+    if ((game.linescore && game.status.ind !== 'PW' && game.status.ind !== 'P') || game.status.reason) {
 	if (game.status.status === 'Game Over' || game.status.status === 'Final' || game.status.status === 'Completed Early') {
 	    return 'Over';
 	}
