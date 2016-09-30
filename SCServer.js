@@ -17,6 +17,7 @@ try {
     main();
 }
 catch (err) {
+    console.log(err);
     console.log('You do not have the proper keys to send pins to the app.\nIf you wish to try using the client, put your keys in a json file called "tokens.json"');
 }
 
@@ -24,6 +25,9 @@ console.log('This is the server (tm)');
 console.log('Started at ' + (new Date()).toISOString());
 
 function main() {
+    runTomorrowCycle();
+    runTwoDaysFromNowCycle();
+
     schedule.scheduleJob('*/1 * * * *', function () {
 	console.log('run');
 	runCycle();
@@ -46,11 +50,11 @@ function runCycle () {
 	console.log('Games are recorded as over for ' + selectedDate.toDateString() + ', no more pins to send -- ' + selectedDate.toISOString());
     }
     else {
-	request(getURL(selectedDate), function (error, response, body) {
-	    if (!error) {
-		sendPinController(JSON.parse(body), selectedDate, new Date());
-	    }
-	});
+        request(getURL(selectedDate), function (error, response, body) {
+            if (!error) {
+                sendPinController(JSON.parse(JSON.stringify(body)), selectedDate, new Date());
+            }
+        });
     }
 }
 
@@ -59,35 +63,45 @@ function runTomorrowCycle () {
     tomorrowDate.setTime(tomorrowDate.getTime() + (14 * 60 * 60 * 1000));
 
     request(getURL(tomorrowDate), function (error, response, body) {
-	if (!error) {
-	    sendPinController(JSON.parse(body), tomorrowDate, new Date());
-	}
+        if (!error) {
+	    try {
+		sendPinController(JSON.parse(JSON.stringify(body)), tomorrowDate, new Date());
+	    }
+	    catch (err) {
+		console.log(err);
+	    }
+        }
     });
 }
 
 function runTwoDaysFromNowCycle () {
     var twoDaysFromNow = new Date();
     twoDaysFromNow.setTime(twoDaysFromNow.getTime() + (38 * 60 * 60 * 1000));
-    
+
     request(getURL(twoDaysFromNow), function (error, response, body) {
-	if (!error) {
-	    sendPinController(JSON.parse(body), twoDaysFromNow, new Date());
-	}
+        if (!error) {
+	    try {
+		sendPinController(JSON.parse(JSON.stringify(body)), twoDaysFromNow, new Date());
+	    }
+	    catch (err) {
+		console.log(err);
+	    }
+        }
     });
 }
 
-function getURL(selectedDate) {
+function getURL(newDate) {
     var date = [];
-    date.push(selectedDate.getFullYear());
-    date.push(selectedDate.getMonth());
-    date.push(selectedDate.getDate());
+    date.push(newDate.getFullYear());
+    date.push(newDate.getMonth());
+    date.push(newDate.getDate());
 
     // Month is given from 0-11
     var month = (date[1] + 1).toString();
     if (month.length === 1) {
             date[1] = '0' + month;
     }
-
+    
     var day = (date[2]).toString();
     if (day.length === 1) {
             date[2] = '0' + day;
