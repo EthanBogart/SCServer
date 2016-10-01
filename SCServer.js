@@ -52,7 +52,12 @@ function runCycle () {
     else {
         request(getURL(selectedDate), function (error, response, body) {
             if (!error) {
-                sendPinController(JSON.parse(JSON.stringify(body)), selectedDate, new Date());
+		try {
+                    sendPinController(JSON.parse(JSON.stringify(body)), selectedDate, new Date());
+		}
+		catch (err) {
+		    console.log(err);
+		}
             }
         });
     }
@@ -316,7 +321,8 @@ function sendPinController (body, selectedDate, runDate) {
     }
     
     var dayObj = {};
-    var games = body.data.games.game;
+
+    var games = JSON.parse(body).data.games.game;
     for (var i in games) {
 	var game = games[i];
 	var gameStatus = getStatus(game);
