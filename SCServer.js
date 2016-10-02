@@ -98,11 +98,11 @@ function runTwoDaysFromNowCycle () {
 function getURL(newDate) {
     var date = [];
     date.push(newDate.getFullYear());
-    date.push(newDate.getMonth());
+    date.push(newDate.getMonth() + 1);
     date.push(newDate.getDate());
 
     // Month is given from 0-11
-    var month = (date[1] + 1).toString();
+    var month = (date[1]).toString();
     if (month.length === 1) {
             date[1] = '0' + month;
     }
@@ -125,8 +125,9 @@ function getURL(newDate) {
 function getDateObj (game, selectedDate) {
     var dateString = selectedDate.toJSON().split('T')[0];
 
-    var givenTime = game.time_aw_lg;
-    var timeSpl = game.time_aw_lg.split(':');
+    var timeSpl = game.time_date_aw_lg.split(' ');
+    var givenTime = timeSpl[1];
+    var timeSpl = givenTime.split(':');
     var offset = game.time_zone_aw_lg;
 
     if (offset.length > 1) {
@@ -144,7 +145,7 @@ function getDateObj (game, selectedDate) {
 }
 
 function getStatus (game) {
-    if ((game.linescore && game.status.ind !== 'PW' && game.status.ind !== 'P') || game.status.reason) {
+    if ((game.linescore && game.status.ind !== 'PW' && game.status.ind !== 'P') || (game.status && game.status.reason)) {
 	if (game.status.status === 'Game Over' || game.status.status === 'Final' || game.status.status === 'Completed Early') {
 	    return 'Over';
 	}
@@ -323,31 +324,37 @@ function sendPinController (body, selectedDate, runDate) {
     var dayObj = {};
 
     var games = JSON.parse(body).data.games.game;
-    for (var i in games) {
-	var game = games[i];
-	var gameStatus = getStatus(game);
-	var pin;
-	if (gameStatus === 'Not Started') {
-	    pin = sendPregamePin(game, selectedDate, runDate);
-	}
-	else if (gameStatus === 'Over') {
-	    pin = sendOverPin(game, selectedDate, runDate);
-	}
-	else if (gameStatus === 'In Progress') {
-	    pin = sendInProgressPin(game, selectedDate, runDate);
-	}
 
-	if (pin) {
-	    dayObj[game.id] = {
-		pin: pin,
-		date: new Date(),
-		status: gameStatus,
-		gameId: game.id,
-		subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
-	    };
+    // For some reason, games not given as array if there is only one
+    if (!Array.isArray(games)) {
+	games = [games];
+    }
+
+    for (var i in games) {
+        var game = games[i];
+        var gameStatus = getStatus(game);
+        var pin;
+        if (gameStatus === 'Not Started') {
+            pin = sendPregamePin(game, selectedDate, runDate);
+        }
+        else if (gameStatus === 'Over') {
+            pin = sendOverPin(game, selectedDate, runDate);
+        }
+        else if (gameStatus === 'In Progress') {
+            pin = sendInProgressPin(game, selectedDate, runDate);
+        }
+        
+        if (pin) {
+            dayObj[game.id] = {
+                pin: pin,
+                date: new Date(),
+                status: gameStatus,
+                gameId: game.id,
+                subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
+            };
 	}
     }
-    
+
     for (var gameI in dayObj) {
 	var pinObj = dayObj[gameI];
 
@@ -356,12 +363,12 @@ function sendPinController (body, selectedDate, runDate) {
 	    if (jsonObj[day][pinObj.gameId]) {
 		var writtenGame = jsonObj[day][pinObj.gameId];
 		if ((pinObj.status === 'Over' && writtenGame.status !== 'Over') || (pinObj.status !== 'Over' && pinObj.status !== 'Halted')) {
-		     sendPin(pinObj, jsonObj, selectedDate);
+		    sendPin(pinObj, jsonObj, selectedDate);
 		}
 	    }
 	}
 	else {
-	     sendPin(pinObj, jsonObj, selectedDate);
+	    sendPin(pinObj, jsonObj, selectedDate);
 	}
     }
     
@@ -409,6 +416,9 @@ function areGamesOver (selectedDate) {
 		return false;
 	    }
 	}
+    }
+    else {
+	return false;
     }
 
     return true;
