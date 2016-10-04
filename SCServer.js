@@ -343,14 +343,20 @@ function sendPinController (body, selectedDate, runDate) {
         else if (gameStatus === 'In Progress') {
             pin = sendInProgressPin(game, selectedDate, runDate);
         }
-        
-        if (pin) {
+
+	// Determine whether playoff game
+	var subscriptions = [game.away_name_abbrev, game.home_name_abbrev];
+	if (typeof game.series !== 'undefined') {
+	    subscriptions.push('playoffs');
+	}
+
+	if (pin) {
             dayObj[game.id] = {
                 pin: pin,
                 date: new Date(),
                 status: gameStatus,
                 gameId: game.id,
-                subscriptions: [game.away_name_abbrev, game.home_name_abbrev]
+                subscriptions: subscriptions
             };
 	}
     }
